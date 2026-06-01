@@ -85,7 +85,7 @@ FUNDS = [
         "weight": 13.69,
         "confidence": "中",
         "proxies": {"NASDAQ100": 0.55, "SP500": 0.35, "USDCNH": 0.10},
-        "bias": "持有，保留小额定投；涨幅过大时不追加。",
+        "bias": "持有，保留小额定投；T+2 确认，估算需看前两天海外市场、汇率和确认日口径，涨幅过大不追加。",
     },
     {
         "name": "易方达信息产业混合A",
@@ -112,7 +112,7 @@ FUNDS = [
         "weight": 4.63,
         "confidence": "中",
         "proxies": {"NASDAQ100": 0.90, "USDCNH": 0.10},
-        "bias": "保留小额定投；若纳指高位急涨，不额外手动加仓。",
+        "bias": "定投已停；持有观察，若纳指高位急涨，不额外手动加仓。",
     },
     {
         "name": "国泰海通中证500指数增强C",
@@ -130,7 +130,7 @@ FUNDS = [
         "weight": 3.09,
         "confidence": "中",
         "proxies": {"NASDAQ100": 0.90, "USDCNH": 0.10},
-        "bias": "持有；与其他纳指基金合并看总敞口。",
+        "bias": "定投已停；持有，与其他纳指基金合并看总敞口。",
     },
     {
         "name": "大成纳斯达克100ETF联接(QDII)A",
@@ -139,7 +139,7 @@ FUNDS = [
         "weight": 7.75,
         "confidence": "中",
         "proxies": {"NASDAQ100": 0.90, "USDCNH": 0.10},
-        "bias": "重点观察；日定投金额偏大，纳指过热时优先考虑降额。",
+        "bias": "定投已停；重点观察，纳指过热时不追加。",
     },
     {
         "name": "摩根标普500指数(QDII)A",
@@ -148,7 +148,7 @@ FUNDS = [
         "weight": 2.00,
         "confidence": "中",
         "proxies": {"SP500": 0.90, "USDCNH": 0.10},
-        "bias": "持有；若美股估值偏热，可考虑降低日扣金额。",
+        "bias": "定投已停；持有，若美股估值偏热不追加。",
     },
     {
         "name": "博时标普500ETF联接(QDII)A",
@@ -179,12 +179,21 @@ FUNDS = [
     },
     {
         "name": "华夏恒生ETF联接(QDII)C",
-        "code": "000948",
+        "code": "006381",
         "amount": 1592.22,
         "weight": 3.96,
         "confidence": "中",
         "proxies": {"HSI": 0.95, "USDCNH": 0.05},
         "bias": "持有观察；港股波动大，不追涨。",
+    },
+    {
+        "name": "施罗德亚洲高息股债基金-M类别(人民币对冲累积)",
+        "code": "968013",
+        "amount": 200.00,
+        "weight": 0.0,
+        "confidence": "低",
+        "proxies": {"HSI": 0.20, "USDCNH": 0.05},
+        "bias": "每日定投 100；小仓观察，重点看亚洲高收益债信用利差、回撤和派息来源，信用风险放大则暂停。",
     },
 ]
 
@@ -423,8 +432,12 @@ def main() -> int:
     args = parser.parse_args()
 
     codes = [stock["sina"] for stock in STOCKS] + list(PROXIES.values())
-    raw = fetch_sina(codes)
-    parsed = parse_lines(raw)
+    try:
+        raw = fetch_sina(codes)
+        parsed = parse_lines(raw)
+    except Exception as exc:
+        print(f"warning: failed to fetch Sina quote data: {exc}")
+        parsed = {}
     stock_rows, quote_time = parse_stock_quotes(parsed)
     proxies = parse_proxies(parsed, stock_rows)
     fund_rows = estimate_funds(proxies)
