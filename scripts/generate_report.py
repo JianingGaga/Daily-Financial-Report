@@ -47,6 +47,9 @@ PROXIES = {
     "SP500": "gb_inx",
     "HSI": "hkHSI",
     "USDCNH": "fx_susdcnh",
+    "COMM_ETF": "sh515050",
+    "FIVEG_ETF": "sz159994",
+    "ZTE": "sz000063",
 }
 
 FUNDS = [
@@ -145,9 +148,9 @@ FUNDS = [
         "code": "008086",
         "amount": 19.98,
         "weight": 0.05,
-        "confidence": "低",
-        "proxies": {"CHINEXT": 0.35, "SZCOMP": 0.25},
-        "bias": "极小仓，定投金额不放大。",
+        "confidence": "中",
+        "proxies": {"FIVEG_ETF": 0.55, "COMM_ETF": 0.25, "ZTE": 0.10},
+        "bias": "极小仓；今天 5G/通信代理偏弱，定投金额不放大。",
     },
     {
         "name": "华夏恒生ETF联接(QDII)C",
@@ -208,6 +211,11 @@ def parse_proxies(parsed: dict[str, list[str]], stock_rows: list[dict[str, objec
             pct = to_float(values[8])
         elif code == "fx_susdcnh" and len(values) >= 12:
             pct = to_float(values[11])
+        elif (code.startswith("sh") or code.startswith("sz")) and len(values) >= 4:
+            prev_close = to_float(values[2])
+            current = to_float(values[3])
+            if prev_close and current is not None:
+                pct = (current - prev_close) / prev_close * 100
         if pct is not None:
             proxies[name] = pct
 
