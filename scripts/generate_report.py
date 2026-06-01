@@ -11,7 +11,6 @@ import argparse
 import datetime as dt
 import html
 import re
-import sys
 import urllib.request
 from pathlib import Path
 
@@ -43,13 +42,39 @@ PROXIES = {
     "CHINEXT": "s_sz399006",
     "SHCOMP": "s_sh000001",
     "SZCOMP": "s_sz399001",
-    "NASDAQ": "gb_ixic",
+    "NASDAQ100": "gb_ndx",
     "SP500": "gb_inx",
     "HSI": "hkHSI",
     "USDCNH": "fx_susdcnh",
     "COMM_ETF": "sh515050",
     "FIVEG_ETF": "sz159994",
     "ZTE": "sz000063",
+    "TECH_ETF": "sh515000",
+    "CHIP_ETF": "sh512760",
+    "STAR50_ETF": "sh588000",
+    "AI_ETF": "sz159819",
+    "COMPUTER_ETF": "sh512720",
+}
+
+PROXY_LABELS = {
+    "CSI300": "沪深300",
+    "CSI500": "中证500",
+    "CSI1000": "中证1000",
+    "CHINEXT": "创业板指",
+    "SHCOMP": "上证指数",
+    "SZCOMP": "深证成指",
+    "NASDAQ100": "纳斯达克100",
+    "SP500": "标普500",
+    "HSI": "恒生指数",
+    "USDCNH": "美元/离岸人民币",
+    "COMM_ETF": "通信ETF华夏",
+    "FIVEG_ETF": "5GETF",
+    "ZTE": "中兴通讯",
+    "TECH_ETF": "科技ETF",
+    "CHIP_ETF": "芯片ETF",
+    "STAR50_ETF": "科创50ETF",
+    "AI_ETF": "AI智能ETF",
+    "COMPUTER_ETF": "计算机ETF",
 }
 
 FUNDS = [
@@ -59,7 +84,7 @@ FUNDS = [
         "amount": 5503.18,
         "weight": 13.69,
         "confidence": "中",
-        "proxies": {"NASDAQ": 0.45, "SP500": 0.25, "USDCNH": 0.10},
+        "proxies": {"NASDAQ100": 0.55, "SP500": 0.35, "USDCNH": 0.10},
         "bias": "持有，保留小额定投；涨幅过大时不追加。",
     },
     {
@@ -67,8 +92,8 @@ FUNDS = [
         "code": "001513",
         "amount": 7618.10,
         "weight": 18.96,
-        "confidence": "低",
-        "proxies": {"CHINEXT": 0.35, "SEMIS": 0.30, "SZCOMP": 0.15},
+        "confidence": "中",
+        "proxies": {"TECH_ETF": 0.25, "CHIP_ETF": 0.25, "STAR50_ETF": 0.20, "AI_ETF": 0.15, "COMPUTER_ETF": 0.15},
         "bias": "持有，不追涨；若单日大涨优先观察而非加仓。",
     },
     {
@@ -77,7 +102,7 @@ FUNDS = [
         "amount": 8486.25,
         "weight": 21.12,
         "confidence": "低",
-        "proxies": {"CSI300": 0.30, "CSI1000": 0.20},
+        "proxies": {"CSI300": 0.35, "CSI500": 0.25, "CSI1000": 0.20, "SHCOMP": 0.10},
         "bias": "持有；看估值和仓位，不因单日波动调整。",
     },
     {
@@ -86,7 +111,7 @@ FUNDS = [
         "amount": 1860.62,
         "weight": 4.63,
         "confidence": "中",
-        "proxies": {"NASDAQ": 0.85, "USDCNH": 0.10},
+        "proxies": {"NASDAQ100": 0.90, "USDCNH": 0.10},
         "bias": "保留小额定投；若纳指高位急涨，不额外手动加仓。",
     },
     {
@@ -104,7 +129,7 @@ FUNDS = [
         "amount": 1240.34,
         "weight": 3.09,
         "confidence": "中",
-        "proxies": {"NASDAQ": 0.85, "USDCNH": 0.10},
+        "proxies": {"NASDAQ100": 0.90, "USDCNH": 0.10},
         "bias": "持有；与其他纳指基金合并看总敞口。",
     },
     {
@@ -113,7 +138,7 @@ FUNDS = [
         "amount": 3112.64,
         "weight": 7.75,
         "confidence": "中",
-        "proxies": {"NASDAQ": 0.85, "USDCNH": 0.10},
+        "proxies": {"NASDAQ100": 0.90, "USDCNH": 0.10},
         "bias": "重点观察；日定投金额偏大，纳指过热时优先考虑降额。",
     },
     {
@@ -140,7 +165,7 @@ FUNDS = [
         "amount": 300.80,
         "weight": 0.75,
         "confidence": "中",
-        "proxies": {"NASDAQ": 0.85, "USDCNH": 0.10},
+        "proxies": {"NASDAQ100": 0.90, "USDCNH": 0.10},
         "bias": "小仓持有，不追加。",
     },
     {
@@ -149,7 +174,7 @@ FUNDS = [
         "amount": 19.98,
         "weight": 0.05,
         "confidence": "中",
-        "proxies": {"FIVEG_ETF": 0.55, "COMM_ETF": 0.25, "ZTE": 0.10},
+        "proxies": {"FIVEG_ETF": 0.65, "COMM_ETF": 0.25, "ZTE": 0.10},
         "bias": "极小仓；今天 5G/通信代理偏弱，定投金额不放大。",
     },
     {
@@ -158,7 +183,7 @@ FUNDS = [
         "amount": 1592.22,
         "weight": 3.96,
         "confidence": "中",
-        "proxies": {"HSI": 0.85, "USDCNH": 0.05},
+        "proxies": {"HSI": 0.95, "USDCNH": 0.05},
         "bias": "持有观察；港股波动大，不追涨。",
     },
 ]
@@ -219,13 +244,6 @@ def parse_proxies(parsed: dict[str, list[str]], stock_rows: list[dict[str, objec
         if pct is not None:
             proxies[name] = pct
 
-    semi_names = {"长电科技", "华工科技"}
-    semi_pcts = []
-    for row in stock_rows:
-        if row["name"] in semi_names and isinstance(row["pct"], str) and row["pct"].endswith("%"):
-            semi_pcts.append(float(row["pct"].replace("%", "")))
-    if semi_pcts:
-        proxies["SEMIS"] = sum(semi_pcts) / len(semi_pcts)
     return proxies
 
 
@@ -233,19 +251,28 @@ def estimate_funds(proxies: dict[str, float]) -> list[dict[str, object]]:
     rows = []
     for fund in FUNDS:
         total = 0.0
+        coverage = 0.0
         used = []
         missing = []
         for symbol, weight in fund["proxies"].items():
             if symbol in proxies:
                 total += proxies[symbol] * weight
-                used.append(f"{symbol} {proxies[symbol]:+.2f}% x {weight:.0%}")
+                coverage += weight
+                label = PROXY_LABELS.get(symbol, symbol)
+                used.append(f"{label} {proxies[symbol]:+.2f}% x {weight:.0%}")
             else:
                 missing.append(symbol)
         confidence = fund["confidence"]
+        if coverage < 0.75 and confidence != "低":
+            confidence = "低"
+        elif coverage < 0.95 and confidence == "高":
+            confidence = "中"
         if missing and confidence == "高":
             confidence = "中"
         elif missing:
             confidence = "低"
+        if coverage < 0.999:
+            used.append(f"未覆盖仓位按 0% 处理，覆盖约 {coverage:.0%}")
         rows.append({
             **fund,
             "estimate_pct": total,
