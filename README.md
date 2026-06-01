@@ -20,8 +20,15 @@
 
 ## 更新日报
 
-每天新增一份：
+运行脚本生成首页和当天归档：
 
-`reports/YYYY-MM-DD.html`
+```bash
+python3 scripts/generate_report.py --date 2026-06-01 --time 14:30
+```
 
-然后把 `index.html` 更新为当天最新内容。
+脚本会抓取公开行情代理数据，生成：
+
+- `index.html`
+- `reports/YYYY-MM-DD.html`
+
+基金涨跌是代理估算，不是官方净值。QDII 主要参考隔夜美股/港股和汇率，A 股基金参考指数、行业或相关股票代理。
