@@ -11,6 +11,7 @@ import argparse
 import datetime as dt
 import html
 import re
+import time
 import urllib.request
 from pathlib import Path
 
@@ -198,11 +199,22 @@ FUNDS = [
 ]
 
 
-def fetch_sina(codes: list[str]) -> str:
+def fetch_sina(codes: list[str], attempts: int = 3) -> str:
     url = "https://hq.sinajs.cn/list=" + ",".join(codes)
     req = urllib.request.Request(url, headers=SINA_REFERER)
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return resp.read().decode("gb18030", errors="replace")
+    last_exc: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                raw = resp.read().decode("gb18030", errors="replace")
+            if re.search(r'hq_str_[^=]+="[^"]+"', raw):
+                return raw
+        except Exception as exc:
+            last_exc = exc
+        time.sleep(1 + attempt)
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Sina quote response did not contain quote data")
 
 
 def parse_lines(raw: str) -> dict[str, list[str]]:
@@ -284,10 +296,11 @@ def estimate_funds(proxies: dict[str, float]) -> list[dict[str, object]]:
             used.append(f"未覆盖仓位按 0% 处理，覆盖约 {coverage:.0%}")
         rows.append({
             **fund,
-            "estimate_pct": total,
+            "estimate_pct": total if coverage > 0 else None,
             "drivers": "；".join(used) if used else "暂无可用代理",
             "missing": "、".join(missing),
             "confidence": confidence,
+            "coverage": coverage,
         })
     return rows
 
@@ -317,7 +330,7 @@ def fund_rows_html(rows: list[dict[str, object]]) -> str:
     body = []
     for row in rows:
         pct = row["estimate_pct"]
-        pct_text = f"{pct:+.2f}%"
+        pct_text = f"{pct:+.2f}%" if isinstance(pct, (int, float)) else "暂无数据"
         missing = f"<br><span class=\"note\">缺少代理：{esc(row['missing'])}</span>" if row["missing"] else ""
         body.append(
             "<tr>"
