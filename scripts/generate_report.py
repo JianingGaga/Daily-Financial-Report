@@ -11,6 +11,7 @@ import argparse
 import datetime as dt
 import html
 import re
+import sys
 import time
 import urllib.request
 from pathlib import Path
@@ -268,6 +269,22 @@ def parse_proxies(parsed: dict[str, list[str]], stock_rows: list[dict[str, objec
     return proxies
 
 
+def validate_market_data(stock_rows: list[dict[str, object]], proxies: dict[str, float]) -> None:
+    stock_count = len(stock_rows)
+    priced_stocks = sum(1 for row in stock_rows if row["price"] != "-" and row["pct"] != "-")
+    proxy_count = len(PROXIES)
+    available_proxies = len(proxies)
+
+    stock_ratio = priced_stocks / stock_count if stock_count else 0
+    proxy_ratio = available_proxies / proxy_count if proxy_count else 0
+
+    if stock_ratio < 0.8 or proxy_ratio < 0.75:
+        raise RuntimeError(
+            "insufficient quote data: "
+            f"stocks={priced_stocks}/{stock_count}, proxies={available_proxies}/{proxy_count}"
+        )
+
+
 def estimate_funds(proxies: dict[str, float]) -> list[dict[str, object]]:
     rows = []
     for fund in FUNDS:
@@ -453,6 +470,12 @@ def main() -> int:
         parsed = {}
     stock_rows, quote_time = parse_stock_quotes(parsed)
     proxies = parse_proxies(parsed, stock_rows)
+    try:
+        validate_market_data(stock_rows, proxies)
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
     fund_rows = estimate_funds(proxies)
 
     date_text = f"{args.date} {args.time}"
